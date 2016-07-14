@@ -81,7 +81,7 @@
       }
 
       function loadAvailabilityData(callback) {
-        var queryUrl = 'http://cors.io/?u=http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=xml';
+        var queryUrl = 'https://cors.io/?u=http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=xml';
         $.ajax({
           type: 'GET',
           dataType: 'xml',
@@ -177,7 +177,7 @@
           map.data.addGeoJson(geoJson);
           drawAvailability(map.data);
         });
-        
+
         setInterval(function() {
           console.log('Refreshing SFPark GeoJSON data.');
           loadAvailabilityData(function(sfParkXml) {
