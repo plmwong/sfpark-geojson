@@ -1,0 +1,205 @@
+<html>
+  <head>
+    <title>SFPark Map</title>
+    <meta name="viewport" content="initial-scale=1.0">
+    <meta charset="utf-8">
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map" style="height: 800px;"></div>
+    <script>
+      var map, infowindow;
+      var circles = [];
+
+      function createFeature(points, location, name, lotType) {
+        var feature = {
+          "type": "Feature",
+          "properties": { "name": name, "lotType": lotType }
+        };
+
+        var coordinates = location.split(',');
+
+        if (points === 1) {
+          feature["geometry"] = { "type": "Point", "coordinates": [ parseFloat(coordinates[0]), parseFloat(coordinates[1]) ] };
+        }
+
+        if (points === 2) {
+          feature["geometry"] = { "type": "LineString", "coordinates": [ [ parseFloat(coordinates[0]), parseFloat(coordinates[1]) ], [ parseFloat(coordinates[2]), parseFloat(coordinates[3]) ] ] };
+        }
+
+        return feature;
+      }
+
+      function translateToGeoJSON(sfParkXml) {
+        var geoJson = {
+          "type": "FeatureCollection",
+          "features": [ ]
+        };
+        var xmlDoc = $(sfParkXml);
+
+        xmlDoc.find('AVL').each(function() {
+          var availability = $(this);
+          var type = availability.find('TYPE').text();
+
+          if (type === 'ON') {
+            var numberOfPoints = parseInt(availability.find('PTS').text());
+            var location = availability.find('LOC').text();
+            var name = availability.find('NAME').text();
+
+            var onStreetFeature = createFeature(numberOfPoints, location, name, 'on_street');
+            geoJson["features"].push(onStreetFeature);
+          }
+
+          if (type === 'OFF') {
+            var numberOfPoints = parseInt(availability.find('PTS').text());
+            var occupancy = parseInt(availability.find('OCC').text());
+            var capacity = parseInt(availability.find('OPER').text());
+            var location = availability.find('LOC').text();
+            var name = availability.find('NAME').text();
+
+            var availability = (occupancy / capacity * 100.0).toFixed(2);
+
+            var offStreetFeature = createFeature(numberOfPoints, location, name, 'off_street');
+            offStreetFeature.properties['occupancy'] = occupancy;
+            offStreetFeature.properties['capacity'] = capacity;
+            offStreetFeature.properties['availability'] = availability;
+
+            geoJson["features"].push(offStreetFeature);
+          }
+        });
+
+        return geoJson;
+      }
+
+      function loadAvailabilityData(callback) {
+        var queryUrl = 'http://cors.io/?u=http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=xml';
+        $.ajax({
+          type: 'GET',
+          dataType: 'xml',
+          url: queryUrl
+        }).done(function(data) {
+          callback(data);
+        });
+      }
+
+      function pad(n, width, z) {
+        z = z || '0';
+        n = n + '';
+        return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+      }
+
+      function getValueBetweenTwoFixedColors(value) {
+        var aR = 200; var aG = 0; var aB = 0;
+        var bR = 255; var bG = 255; var bB = 255;
+
+        var red   = (bR - aR) * value + aR;
+        var green = (bG - aG) * value + aG;
+        var blue  = (bB - aB) * value + aB;
+
+        return '#' + pad(Math.round(red).toString(16), 2) + pad(Math.round(green).toString(16), 2) + pad(Math.round(blue).toString(16), 2);
+      }
+
+      function drawAvailability(data) {
+        console.log('Drawing availability circles.');
+        data.forEach(function(feature) {
+          if (feature.getProperty('lotType') === 'off_street') {
+            var latLong = feature.getGeometry().get();
+            var colour = getValueBetweenTwoFixedColors(parseFloat(feature.getProperty('availability')) / 100.0);
+
+            var circle = new google.maps.Circle({
+                                strokeColor: colour,
+                                strokeOpacity: 1.0,
+                                strokeWeight: 3,
+                                fillColor: colour,
+                                fillOpacity: 0.85,
+                                map: map,
+                                center: latLong,
+                                radius: 325
+                              });
+            circles.push(circle);
+          }
+        });
+      }
+
+      function clearAvailability() {
+        console.log('Clearing availability circles.');
+        circles.forEach(function(circle) {
+          circle.setMap(null);
+        });
+
+        circles = [];
+      }
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: { lat: 37.7778886, lng: -122.4206095 },
+          zoom: 14,
+          styles: [{"featureType":"water","elementType":"geometry","stylers":[{"color":"#e9e9e9"},{"lightness":17}]},{"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#f5f5f5"},{"lightness":20}]},{"featureType":"road.highway","elementType":"geometry.fill","stylers":[{"color":"#ffffff"},{"lightness":17}]},{"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#ffffff"},{"lightness":29},{"weight":0.2}]},{"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#ffffff"},{"lightness":18}]},{"featureType":"road.local","elementType":"geometry","stylers":[{"color":"#ffffff"},{"lightness":16}]},{"featureType":"poi","elementType":"geometry","stylers":[{"color":"#f5f5f5"},{"lightness":21}]},{"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#dedede"},{"lightness":21}]},{"elementType":"labels.text.stroke","stylers":[{"visibility":"on"},{"color":"#ffffff"},{"lightness":16}]},{"elementType":"labels.text.fill","stylers":[{"saturation":36},{"color":"#333333"},{"lightness":40}]},{"elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"featureType":"transit","elementType":"geometry","stylers":[{"color":"#f2f2f2"},{"lightness":19}]},{"featureType":"administrative","elementType":"geometry.fill","stylers":[{"color":"#fefefe"},{"lightness":20}]},{"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#fefefe"},{"lightness":17},{"weight":1.2}]}]
+        });
+
+        infowindow = new google.maps.InfoWindow();
+
+        map.data.setStyle({
+          strokeColor: '#3776BA',
+          strokeWeight: 1.4
+        });
+
+        map.data.addListener('mouseover', function(event) {
+        	var myLabel = event.feature.getProperty('name');
+
+          if (event.feature.getProperty('occupancy')) {
+           myLabel = myLabel + ': ' + event.feature.getProperty('availability') + '% (' + event.feature.getProperty('occupancy') + '/' + event.feature.getProperty('capacity') + ')';
+          }
+
+          infowindow.setContent('<div style="width: 150px;">' + myLabel + '</div>');
+        	infowindow.setPosition(event.feature.getGeometry().get());
+        	infowindow.setOptions({ pixelOffset: new google.maps.Size(0, -30) });
+        	infowindow.open(map);
+        });
+
+        map.data.addListener('mouseout', function(event) {
+        	infowindow.close();
+        });
+
+        loadAvailabilityData(function(sfParkXml) {
+          console.log('Initialising SFPark GeoJSON data.');
+          var geoJson = translateToGeoJSON(sfParkXml);
+          console.log('Loaded ' + geoJson.features.length + ' features.');
+          map.data.addGeoJson(geoJson);
+          drawAvailability(map.data);
+        });
+        
+        setInterval(function() {
+          console.log('Refreshing SFPark GeoJSON data.');
+          loadAvailabilityData(function(sfParkXml) {
+            var geoJson = translateToGeoJSON(sfParkXml);
+            console.log('Refreshed ' + geoJson.features.length + ' features.');
+            var featuresToRemove = [];
+            map.data.forEach(function (feature) {
+              featuresToRemove.push(feature);
+            });
+            map.data.addGeoJson(geoJson);
+            setTimeout(function() {
+              featuresToRemove.forEach(function (feature) {
+                map.data.remove(feature);
+              });
+              clearAvailability();
+              drawAvailability(map.data);
+            }, 250);
+          });
+        }, 30000);
+      }
+    </script>
+    <script src="https://code.jquery.com/jquery-3.0.0.min.js" integrity="sha256-JmvOoLtYsmqlsWxa7mDSLMwa6dZ9rrIdtrrVYRnDRH0=" crossorigin="anonymous"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbuq-VfLEd61SsglrvKSCrO5z4PAmGe10&callback=initMap" async defer></script>
+  </body>
+</html>
