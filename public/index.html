@@ -19,6 +19,7 @@
     <script>
       var map, infowindow;
       var circles = [];
+      var labels = [];
 
       function createFeature(points, location, name, lotType) {
         var feature = {
@@ -81,7 +82,7 @@
       }
 
       function loadAvailabilityData(callback) {
-        var queryUrl = 'http://cors.io/?u=http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=xml';
+        var queryUrl = 'https://crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=xml';
         $.ajax({
           type: 'GET',
           dataType: 'xml',
@@ -97,21 +98,29 @@
         return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
       }
 
+      function toHex(value) {
+        return pad(Math.round(value).toString(16), 2);
+      }
+
       function getValueBetweenTwoFixedColors(value) {
-        var aR = 200; var aG = 0; var aB = 0;
+        var aR = 30; var aG = 206; var aB = 42;
         var bR = 255; var bG = 255; var bB = 255;
 
         var red   = (bR - aR) * value + aR;
         var green = (bG - aG) * value + aG;
         var blue  = (bB - aB) * value + aB;
 
-        return '#' + pad(Math.round(red).toString(16), 2) + pad(Math.round(green).toString(16), 2) + pad(Math.round(blue).toString(16), 2);
+        return '#' + toHex(red) + toHex(green) + toHex(blue);
+      }
+
+      function getAvailabilityPercentage(feature) {
+        return (100 - parseFloat(feature.getProperty('availability'))).toFixed(1);
       }
 
       function drawAvailability(data) {
         console.log('Drawing availability circles.');
         data.forEach(function(feature) {
-          if (feature.getProperty('lotType') === 'off_street') {
+          if (feature.getProperty('lotType') === 'off_street' && !isNaN(parseFloat(feature.getProperty('availability')))) {
             var latLong = feature.getGeometry().get();
             var colour = getValueBetweenTwoFixedColors(parseFloat(feature.getProperty('availability')) / 100.0);
 
@@ -125,18 +134,35 @@
                                 center: latLong,
                                 radius: 325
                               });
+
+            var label = new MapLabel({
+                       text: getAvailabilityPercentage(feature) + '%',
+                       position: latLong,
+                       map: map,
+                       fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
+                       fontSize: 14,
+                       fontColor: '#023858'
+                     });
+
             circles.push(circle);
+            labels.push(label);
           }
         });
       }
 
       function clearAvailability() {
-        console.log('Clearing availability circles.');
+        console.log('Clearing availability circles and labels.');
+
         circles.forEach(function(circle) {
           circle.setMap(null);
         });
 
+        labels.forEach(function(label) {
+            label.setMap(null);
+        });
+
         circles = [];
+        labels = [];
       }
 
       function initMap() {
@@ -157,7 +183,7 @@
         	var myLabel = event.feature.getProperty('name');
 
           if (event.feature.getProperty('occupancy')) {
-           myLabel = myLabel + ': ' + event.feature.getProperty('availability') + '% (' + event.feature.getProperty('occupancy') + '/' + event.feature.getProperty('capacity') + ')';
+           myLabel = myLabel + ': ' + getAvailabilityPercentage(event.feature) + '% (' + (event.feature.getProperty('capacity') - event.feature.getProperty('occupancy')) + '/' + event.feature.getProperty('capacity') + ' free)';
           }
 
           infowindow.setContent('<div style="width: 150px;">' + myLabel + '</div>');
