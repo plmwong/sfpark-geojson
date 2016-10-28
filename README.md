@@ -22,7 +22,9 @@ $.ajax({
 
 ## Sample
 
-`npm` and NodeJS are only used in this solution to host a static web server.
+A sample Google Map using sfpark-geojson can be viewed here:  https://htmlpreview.github.io/?https://github.com/plmwong/sfpark-geojson/blob/master/public/index.html
+
+If you'd rather run locally, you can run a static web server using _nodejs_ and _npm_:
 
 ```shell
 npm install

@@ -141,6 +141,7 @@
         loadAvailabilityData(function(sfParkJson) {
           console.log('Initialising SFPark GeoJSON data.');
           var geoJson = sfParkGeoJson.translate(sfParkJson);
+          console.log(geoJson);
           console.log('Loaded ' + geoJson.features.length + ' features.');
           map.data.addGeoJson(geoJson);
           drawAvailability(map.data);
