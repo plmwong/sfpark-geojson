@@ -16,76 +16,17 @@
   </head>
   <body>
     <div id="map" style="height: 800px;"></div>
+    <script type="text/javascript" src="sfpark-geojson.js"></script>
     <script>
       var map, infowindow;
       var circles = [];
       var labels = [];
 
-      function createFeature(points, location, name, lotType) {
-        var feature = {
-          "type": "Feature",
-          "properties": { "name": name, "lotType": lotType }
-        };
-
-        var coordinates = location.split(',');
-
-        if (points === 1) {
-          feature["geometry"] = { "type": "Point", "coordinates": [ parseFloat(coordinates[0]), parseFloat(coordinates[1]) ] };
-        }
-
-        if (points === 2) {
-          feature["geometry"] = { "type": "LineString", "coordinates": [ [ parseFloat(coordinates[0]), parseFloat(coordinates[1]) ], [ parseFloat(coordinates[2]), parseFloat(coordinates[3]) ] ] };
-        }
-
-        return feature;
-      }
-
-      function translateToGeoJSON(sfParkXml) {
-        var geoJson = {
-          "type": "FeatureCollection",
-          "features": [ ]
-        };
-        var xmlDoc = $(sfParkXml);
-
-        xmlDoc.find('AVL').each(function() {
-          var availability = $(this);
-          var type = availability.find('TYPE').text();
-
-          if (type === 'ON') {
-            var numberOfPoints = parseInt(availability.find('PTS').text());
-            var location = availability.find('LOC').text();
-            var name = availability.find('NAME').text();
-
-            var onStreetFeature = createFeature(numberOfPoints, location, name, 'on_street');
-            geoJson["features"].push(onStreetFeature);
-          }
-
-          if (type === 'OFF') {
-            var numberOfPoints = parseInt(availability.find('PTS').text());
-            var occupancy = parseInt(availability.find('OCC').text());
-            var capacity = parseInt(availability.find('OPER').text());
-            var location = availability.find('LOC').text();
-            var name = availability.find('NAME').text();
-
-            var availability = (occupancy / capacity * 100.0).toFixed(2);
-
-            var offStreetFeature = createFeature(numberOfPoints, location, name, 'off_street');
-            offStreetFeature.properties['occupancy'] = occupancy;
-            offStreetFeature.properties['capacity'] = capacity;
-            offStreetFeature.properties['availability'] = availability;
-
-            geoJson["features"].push(offStreetFeature);
-          }
-        });
-
-        return geoJson;
-      }
-
       function loadAvailabilityData(callback) {
-        var queryUrl = 'https://crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=xml';
+        var queryUrl = '//crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=json';
         $.ajax({
           type: 'GET',
-          dataType: 'xml',
+          dataType: 'json',
           url: queryUrl
         }).done(function(data) {
           callback(data);
@@ -166,6 +107,7 @@
       }
 
       function initMap() {
+        console.log('initMap callback triggered');
         map = new google.maps.Map(document.getElementById('map'), {
           center: { lat: 37.7778886, lng: -122.4206095 },
           zoom: 14,
@@ -196,9 +138,9 @@
         	infowindow.close();
         });
 
-        loadAvailabilityData(function(sfParkXml) {
+        loadAvailabilityData(function(sfParkJson) {
           console.log('Initialising SFPark GeoJSON data.');
-          var geoJson = translateToGeoJSON(sfParkXml);
+          var geoJson = sfParkGeoJson.translate(sfParkJson);
           console.log('Loaded ' + geoJson.features.length + ' features.');
           map.data.addGeoJson(geoJson);
           drawAvailability(map.data);
@@ -206,8 +148,8 @@
 
         setInterval(function() {
           console.log('Refreshing SFPark GeoJSON data.');
-          loadAvailabilityData(function(sfParkXml) {
-            var geoJson = translateToGeoJSON(sfParkXml);
+          loadAvailabilityData(function(sfParkJson) {
+            var geoJson = sfParkGeoJson.translate(sfParkJson);
             console.log('Refreshed ' + geoJson.features.length + ' features.');
             var featuresToRemove = [];
             map.data.forEach(function (feature) {
@@ -226,7 +168,7 @@
       }
     </script>
     <script src="https://code.jquery.com/jquery-3.0.0.min.js" integrity="sha256-JmvOoLtYsmqlsWxa7mDSLMwa6dZ9rrIdtrrVYRnDRH0=" crossorigin="anonymous"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbuq-VfLEd61SsglrvKSCrO5z4PAmGe10&callback=initMap" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbuq-VfLEd61SsglrvKSCrO5z4PAmGe10&callback=initMap"></script>
     <script src="maplabel-custom.js"></script>
   </body>
 </html>
