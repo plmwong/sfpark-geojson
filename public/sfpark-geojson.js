@@ -1,12 +1,11 @@
 /**
- * @sfpark-geojson.js
- * Translates the response from the SFPark API to a GeoJSON compatible format.
+ * @summary Translates the response from the SFPark API to a GeoJSON compatible format.
  */
 
 var sfParkGeoJson = (function () {
   var my = { };
 
-  function createFeature(points, location, name, lotType) {
+  function createBasicFeature(points, location, name, lotType) {
     var feature = {
       "type": "Feature",
       "properties": { "name": name, "lotType": lotType }
@@ -39,7 +38,7 @@ var sfParkGeoJson = (function () {
         var location = availability.LOC;
         var name = availability.NAME;
 
-        var onStreetFeature = createFeature(numberOfPoints, location, name, 'on_street');
+        var onStreetFeature = createBasicFeature(numberOfPoints, location, name, 'on_street');
         geoJson["features"].push(onStreetFeature);
       }
 
@@ -52,7 +51,7 @@ var sfParkGeoJson = (function () {
 
         var availability = (occupancy / capacity * 100.0).toFixed(2);
 
-        var offStreetFeature = createFeature(numberOfPoints, location, name, 'off_street');
+        var offStreetFeature = createBasicFeature(numberOfPoints, location, name, 'off_street');
         offStreetFeature.properties['occupancy'] = occupancy;
         offStreetFeature.properties['capacity'] = capacity;
         offStreetFeature.properties['availability'] = availability;

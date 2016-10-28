@@ -4,11 +4,11 @@ Simple javascript module for translating the response taken from an SFPark API (
 service or application such as Google Maps.
 
 ## Usage
-```
+```html
 <script type="text/javascript" src="sfpark-geojson.js"></script>
 ```
 
-```
+```javascript
 var queryUrl = '//crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=json';
 $.ajax({
   type: 'GET',
@@ -24,7 +24,7 @@ $.ajax({
 
 `npm` and NodeJS are only used in this solution to host a static web server.
 
-```
+```shell
 npm install
 node .
 ```
