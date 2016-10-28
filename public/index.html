@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>SFPark Example Map</title>
+    <title>Sample SFPark Map</title>
     <meta name="viewport" content="initial-scale=1.0">
     <meta charset="utf-8">
     <style>
@@ -23,7 +23,7 @@
       var labels = [];
 
       function loadAvailabilityData(callback) {
-        var queryUrl = '//crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=json';
+        var queryUrl = '//crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=json&pricing=yes';
         $.ajax({
           type: 'GET',
           dataType: 'json',
