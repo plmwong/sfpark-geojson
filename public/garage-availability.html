@@ -1,0 +1,155 @@
+<html>
+  <head>
+    <title>Sample SFPark Map - Garage Availability</title>
+    <meta name="viewport" content="initial-scale=1.0">
+    <meta charset="utf-8">
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map" style="height: 800px;"></div>
+    <script type="text/javascript" src="sfpark-geojson.js"></script>
+    <script type="text/javascript">
+      var map, infowindow;
+      var circles = [];
+      var labels = [];
+
+      function loadAvailabilityData(callback) {
+        var queryUrl = '//crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=json';
+        $.ajax({
+          type: 'GET',
+          dataType: 'json',
+          url: queryUrl
+        }).done(function(data) {
+          callback(data);
+        });
+      }
+
+      function pad(n, width, z) {
+        z = z || '0';
+        n = n + '';
+        return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+      }
+
+      function toHex(value) {
+        return pad(Math.round(value).toString(16), 2);
+      }
+
+      function getValueBetweenTwoFixedColors(value) {
+        var aR = 30; var aG = 206; var aB = 42;
+        var bR = 255; var bG = 255; var bB = 255;
+
+        var red   = (bR - aR) * value + aR;
+        var green = (bG - aG) * value + aG;
+        var blue  = (bB - aB) * value + aB;
+
+        return '#' + toHex(red) + toHex(green) + toHex(blue);
+      }
+
+      function getAvailabilityPercentage(feature) {
+        return (100 - parseFloat(feature.getProperty('availability'))).toFixed(1);
+      }
+
+      function drawAvailability(data) {
+        console.log('Drawing availability circles.');
+        data.forEach(function(feature) {
+          if (feature.getProperty('lotType') === 'off_street' && !isNaN(parseFloat(feature.getProperty('availability')))) {
+            var latLong = feature.getGeometry().get();
+            var colour = getValueBetweenTwoFixedColors(parseFloat(feature.getProperty('availability')) / 100.0);
+
+            var circle = new google.maps.Circle({
+                                strokeColor: colour,
+                                strokeOpacity: 1.0,
+                                strokeWeight: 3,
+                                fillColor: colour,
+                                fillOpacity: 0.85,
+                                map: map,
+                                center: latLong,
+                                radius: 325
+                              });
+
+            var label = new MapLabel({
+                       text: getAvailabilityPercentage(feature) + '%',
+                       position: latLong,
+                       map: map,
+                       fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
+                       fontSize: 14,
+                       fontColor: '#023858'
+                     });
+
+            circles.push(circle);
+            labels.push(label);
+          }
+        });
+      }
+
+      function clearAvailability() {
+        console.log('Clearing availability circles and labels.');
+
+        circles.forEach(function(circle) {
+          circle.setMap(null);
+        });
+
+        labels.forEach(function(label) {
+            label.setMap(null);
+        });
+
+        circles = [];
+        labels = [];
+      }
+
+      function initMap() {
+        console.log('initMap callback triggered');
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: { lat: 37.7778886, lng: -122.4206095 },
+          zoom: 14,
+          styles: [{"featureType":"water","elementType":"geometry","stylers":[{"color":"#e9e9e9"},{"lightness":17}]},{"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#f5f5f5"},{"lightness":20}]},{"featureType":"road.highway","elementType":"geometry.fill","stylers":[{"color":"#ffffff"},{"lightness":17}]},{"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#ffffff"},{"lightness":29},{"weight":0.2}]},{"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#ffffff"},{"lightness":18}]},{"featureType":"road.local","elementType":"geometry","stylers":[{"color":"#ffffff"},{"lightness":16}]},{"featureType":"poi","elementType":"geometry","stylers":[{"color":"#f5f5f5"},{"lightness":21}]},{"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#dedede"},{"lightness":21}]},{"elementType":"labels.text.stroke","stylers":[{"visibility":"on"},{"color":"#ffffff"},{"lightness":16}]},{"elementType":"labels.text.fill","stylers":[{"saturation":36},{"color":"#333333"},{"lightness":40}]},{"elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"featureType":"transit","elementType":"geometry","stylers":[{"color":"#f2f2f2"},{"lightness":19}]},{"featureType":"administrative","elementType":"geometry.fill","stylers":[{"color":"#fefefe"},{"lightness":20}]},{"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#fefefe"},{"lightness":17},{"weight":1.2}]}]
+        });
+
+        infowindow = new google.maps.InfoWindow();
+
+        map.data.setStyle({
+          strokeColor: '#3776BA',
+          strokeWeight: 1.4
+        });
+
+        map.data.addListener('mouseover', function(event) {
+        	var myLabel = event.feature.getProperty('name');
+
+          if (event.feature.getProperty('occupancy')) {
+           myLabel = myLabel + ': ' + getAvailabilityPercentage(event.feature) + '% (' + (event.feature.getProperty('capacity') - event.feature.getProperty('occupancy')) + '/' + event.feature.getProperty('capacity') + ' free)';
+          }
+
+          infowindow.setContent('<div style="width: 150px;">' + myLabel + '</div>');
+        	infowindow.setPosition(event.feature.getGeometry().get());
+        	infowindow.setOptions({ pixelOffset: new google.maps.Size(0, -30) });
+        	infowindow.open(map);
+        });
+
+        map.data.addListener('mouseout', function(event) {
+        	infowindow.close();
+        });
+
+        loadAvailabilityData(function(sfParkJson) {
+          console.log('Initialising SFPark GeoJSON data.');
+          var geoJson = sfParkGeoJson.translate(sfParkJson);
+          console.log(geoJson);
+          console.log('Loaded ' + geoJson.features.length + ' features.');
+          map.data.addGeoJson(geoJson);
+          drawAvailability(map.data);
+        });
+      }
+    </script>
+    <script src="https://code.jquery.com/jquery-3.0.0.min.js" integrity="sha256-JmvOoLtYsmqlsWxa7mDSLMwa6dZ9rrIdtrrVYRnDRH0=" crossorigin="anonymous"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbuq-VfLEd61SsglrvKSCrO5z4PAmGe10&callback=initMap"></script>
+    <script src="maplabel-custom.js"></script>
+  </body>
+</html>

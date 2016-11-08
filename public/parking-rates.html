@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>Sample SFPark Map</title>
+    <title>Sample SFPark Map - Parking Rates</title>
     <meta name="viewport" content="initial-scale=1.0">
     <meta charset="utf-8">
     <style>
@@ -18,9 +18,7 @@
     <div id="map" style="height: 800px;"></div>
     <script type="text/javascript" src="sfpark-geojson.js"></script>
     <script type="text/javascript">
-      var map, infowindow;
-      var circles = [];
-      var labels = [];
+      var map, infowindow, maxRate = 0;
 
       function loadAvailabilityData(callback) {
         var queryUrl = '//crossorigin.me/http://api.sfpark.org/sfpark/rest/availabilityservice?radius=3.0&uom=mile&response=json&pricing=yes';
@@ -44,66 +42,14 @@
       }
 
       function getValueBetweenTwoFixedColors(value) {
-        var aR = 30; var aG = 206; var aB = 42;
-        var bR = 255; var bG = 255; var bB = 255;
+        var aR = 0; var aG = 255; var aB = 30;
+        var bR = 255; var bG = 30; var bB = 0;
 
         var red   = (bR - aR) * value + aR;
         var green = (bG - aG) * value + aG;
         var blue  = (bB - aB) * value + aB;
 
         return '#' + toHex(red) + toHex(green) + toHex(blue);
-      }
-
-      function getAvailabilityPercentage(feature) {
-        return (100 - parseFloat(feature.getProperty('availability'))).toFixed(1);
-      }
-
-      function drawAvailability(data) {
-        console.log('Drawing availability circles.');
-        data.forEach(function(feature) {
-          if (feature.getProperty('lotType') === 'off_street' && !isNaN(parseFloat(feature.getProperty('availability')))) {
-            var latLong = feature.getGeometry().get();
-            var colour = getValueBetweenTwoFixedColors(parseFloat(feature.getProperty('availability')) / 100.0);
-
-            var circle = new google.maps.Circle({
-                                strokeColor: colour,
-                                strokeOpacity: 1.0,
-                                strokeWeight: 3,
-                                fillColor: colour,
-                                fillOpacity: 0.85,
-                                map: map,
-                                center: latLong,
-                                radius: 325
-                              });
-
-            var label = new MapLabel({
-                       text: getAvailabilityPercentage(feature) + '%',
-                       position: latLong,
-                       map: map,
-                       fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
-                       fontSize: 14,
-                       fontColor: '#023858'
-                     });
-
-            circles.push(circle);
-            labels.push(label);
-          }
-        });
-      }
-
-      function clearAvailability() {
-        console.log('Clearing availability circles and labels.');
-
-        circles.forEach(function(circle) {
-          circle.setMap(null);
-        });
-
-        labels.forEach(function(label) {
-            label.setMap(null);
-        });
-
-        circles = [];
-        labels = [];
       }
 
       function initMap() {
@@ -115,21 +61,17 @@
         });
 
         infowindow = new google.maps.InfoWindow();
-
-        map.data.setStyle({
-          strokeColor: '#3776BA',
-          strokeWeight: 1.4
-        });
+        infowindow.setZIndex(2000);
 
         map.data.addListener('mouseover', function(event) {
-        	var myLabel = event.feature.getProperty('name');
+        	var myLabel = event.feature.getProperty('name') + ': $' + parseFloat(event.feature.getProperty('appliedRate')).toFixed(2);
 
-          if (event.feature.getProperty('occupancy')) {
-           myLabel = myLabel + ': ' + getAvailabilityPercentage(event.feature) + '% (' + (event.feature.getProperty('capacity') - event.feature.getProperty('occupancy')) + '/' + event.feature.getProperty('capacity') + ' free)';
+          infowindow.setContent('<div style="width: 200px;">' + myLabel + '</div>');
+
+          if (event.feature.getGeometry() && event.feature.getGeometry().b) {
+        	  infowindow.setPosition(event.feature.getGeometry().b[0]);
           }
 
-          infowindow.setContent('<div style="width: 150px;">' + myLabel + '</div>');
-        	infowindow.setPosition(event.feature.getGeometry().get());
         	infowindow.setOptions({ pixelOffset: new google.maps.Size(0, -30) });
         	infowindow.open(map);
         });
@@ -138,38 +80,79 @@
         	infowindow.close();
         });
 
+        function getTime(sfParkTime, now) {
+          var date = now.format('YYYY-MM-DD');
+          var dateTime = moment(date + ' ' + sfParkTime.toLowerCase(), 'YYYY-MM-DD hh:mm a');
+
+          return dateTime;
+        }
+
+        function getApplicableRate(rates, now) {
+          var applicableRate;
+
+          rates.forEach(function(rate) {
+            if (!rate.start_of_period || !rate.end_of_period) {
+              return;
+            }
+
+            var beginning = getTime(rate.start_of_period, now);
+            var end = getTime(rate.end_of_period, now);
+
+            if (rate.end_of_period == '12:00 AM') {
+              end = end.add(1, 'days');
+            }
+
+            var rateFloat = parseFloat(rate.rate);
+            if (rateFloat > maxRate) {
+              maxRate = rateFloat;
+            }
+
+            if (now.isBetween(beginning, end)) {
+              applicableRate = rateFloat;
+            }
+          });
+
+          return applicableRate;
+        }
+
+        function augmentApplicableRate(geoJson) {
+          var now = moment();
+          geoJson.features.forEach(function(feature) {
+            var rates = feature.properties['rates'];
+            var applicableRate = getApplicableRate(rates, now);
+
+            feature.properties['appliedRate'] = applicableRate;
+          });
+        }
+
         loadAvailabilityData(function(sfParkJson) {
           console.log('Initialising SFPark GeoJSON data.');
           var geoJson = sfParkGeoJson.translate(sfParkJson);
-          console.log(geoJson);
-          console.log('Loaded ' + geoJson.features.length + ' features.');
-          map.data.addGeoJson(geoJson);
-          drawAvailability(map.data);
-        });
+          var filtered = geoJson.features.filter(function(feature) { return feature.properties.lotType == 'on_street'; });
 
-        setInterval(function() {
-          console.log('Refreshing SFPark GeoJSON data.');
-          loadAvailabilityData(function(sfParkJson) {
-            var geoJson = sfParkGeoJson.translate(sfParkJson);
-            console.log('Refreshed ' + geoJson.features.length + ' features.');
-            var featuresToRemove = [];
-            map.data.forEach(function (feature) {
-              featuresToRemove.push(feature);
-            });
-            map.data.addGeoJson(geoJson);
-            setTimeout(function() {
-              featuresToRemove.forEach(function (feature) {
-                map.data.remove(feature);
-              });
-              clearAvailability();
-              drawAvailability(map.data);
-            }, 250);
+          geoJson.features = filtered;
+
+          console.log('Loaded ' + geoJson.features.length + ' features.');
+          augmentApplicableRate(geoJson);
+          console.log('Augmenting Geo JSON data with applied rates for now');
+          map.data.addGeoJson(geoJson);
+          map.data.setStyle(function(feature) {
+              var rate = feature.getProperty('appliedRate');
+              var rateProportion = rate / maxRate;
+
+              var colour = getValueBetweenTwoFixedColors(rateProportion);
+
+              return {
+                strokeColor: colour,
+                strokeWeight: 2.8
+              };
           });
-        }, 30000);
+        });
       }
     </script>
     <script src="https://code.jquery.com/jquery-3.0.0.min.js" integrity="sha256-JmvOoLtYsmqlsWxa7mDSLMwa6dZ9rrIdtrrVYRnDRH0=" crossorigin="anonymous"></script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbuq-VfLEd61SsglrvKSCrO5z4PAmGe10&callback=initMap"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.15.2/moment.min.js" />
     <script src="maplabel-custom.js"></script>
   </body>
 </html>

@@ -22,7 +22,13 @@ $.ajax({
 
 ## Sample
 
-A sample Google Map using sfpark-geojson can be viewed here:  https://htmlpreview.github.io/?https://github.com/plmwong/sfpark-geojson/blob/master/public/index.html
+A sample Google Map using sfpark-geojson can be viewed here:
+
+  https://htmlpreview.github.io/?https://github.com/plmwong/sfpark-geojson/blob/master/public/garage-availability.html
+
+Or here:
+
+  https://htmlpreview.github.io/?https://github.com/plmwong/sfpark-geojson/blob/master/public/parking-rates.html
 
 If you'd rather run locally, you can run a static web server using _nodejs_ and _npm_:
 
