@@ -20,6 +20,11 @@ $.ajax({
 });
 ```
 
+```javascript
+var map = new google.maps.Map(document.getElementById('map'), { });
+map.data.addGeoJson(geoJson);
+```
+
 ## Sample
 
 A sample Google Map using sfpark-geojson can be viewed here:
