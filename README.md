@@ -42,6 +42,6 @@ npm install
 node .
 ```
 
-Then browse to http://localhost:8080 to view the sample Google Map using data from the SFPark API.
+Then browse to http://localhost:8080/garage-availability.html to view a sample Google Map using data from the SFPark API.
 
 ![Sample Google Map](assets/sample.png)
